@@ -7,7 +7,6 @@ using UnityEngine.UI;
 
 public class GamePanelsController : MonoBehaviour
 {
-
 	//UI Panels
 	[SerializeField] private GameObject _startingMenuPanel;
 	[SerializeField] private GameObject _setGameBoardPositionPanel ;
@@ -19,7 +18,7 @@ public class GamePanelsController : MonoBehaviour
 	[SerializeField] private PokeButton _boardPositionConfirmedButton;
 	[SerializeField] private PokeButton _exitButton;
 	//TMP
-	[FormerlySerializedAs("_playerMessage")] [SerializeField] private TMP_Text _gameOutcomeMessage;
+	[SerializeField] private TMP_Text _gameOutcomeMessage;
 	private TicTacToeAI _ai;
 	private MRUK_MeshRenderer_Controller _mrukMeshRendererController;
 
@@ -61,33 +60,40 @@ public class GamePanelsController : MonoBehaviour
 		DisableStartingMenuPanel();
 		EnableGameBoardPositionPanel();
 		ShowPokeButton(_boardPositionConfirmedButton);
-		_mrukMeshRendererController.EnableMRUKRoomRenderers();
 		OnGameDifficultyLevelSelected.Invoke();
-		//Todo : show room boundary
+		AudioManager.Instance.PlayButtonPressAudioClip();
+		
+		#if UNITY_EDITOR
+			_mrukMeshRendererController.EnableMRUKRoomRenderers();
+		#endif
 	}
 	
 	private void BoardPositionConfirmed()
 	{
 		_ai.StartGame();
-		_mrukMeshRendererController.DisableMRUKRoomRenderers();
 		OnBoardPositionConfirmed.Invoke();
-		Debug.Log("Perfect! Button Tapped");
+		AudioManager.Instance.PlayButtonPressAudioClip();
+		log("Board Position Confirmed! (Button Tapped)");
+		
+		#if UNITY_EDITOR
+			_mrukMeshRendererController.DisableMRUKRoomRenderers();
+        #endif
 	}
 	
 	private void OnGameStarted()
 	{
-		Debug.Log("On Game Started");
+		log("On Game Started");
 		DisableGameBoardPositionPanel();
 		HidePokeButton(_boardPositionConfirmedButton);
 		EnableGameInfoPanel();
 		ShowPokeButton(_exitButton);;
 	}
 	
-	private void OnGameEnded(int winner)
+	private void OnGameEnded(Winner winner)
 	{
 		DisableGameInfoPanel();
 		EnableGameOutcomePanel();
-		_gameOutcomeMessage.text = winner == -1 ? "Tie" : winner == 1 ? "Computer Player won!" : "You won!";
+		_gameOutcomeMessage.text = winner == Winner.Tie ? "Tie" : winner == Winner.AI ? "Computer Player won!" : "You won!";
 	}
 
 
@@ -126,12 +132,12 @@ public class GamePanelsController : MonoBehaviour
 	
 	private void ShowPokeButton(PokeButton pokeButton)
 	{
-		pokeButton.transform.GetComponent<RenderersInChildrenGameObjectsController>().EnableGeometryRender();
+		pokeButton.Show();
 	}
 	
 	private void HidePokeButton(PokeButton pokeButton)
 	{
-		pokeButton.transform.GetComponent<RenderersInChildrenGameObjectsController>().DisableGeometryRender();
+		pokeButton.Hide();
 	}
 	
 	
@@ -152,9 +158,11 @@ public class GamePanelsController : MonoBehaviour
 			if (spawnedXAndOsGameObject.transform.TryGetComponent(out AnimateLocalScale animLocalScale))
 			{
 				animLocalScale.MinimizeObject();
-				// Destroy(spawnedXAndOsGameObject, animLocalScale.animTime);
 			}
 		}
+
+		_ai.GameExitedPrematurely();
+		AudioManager.Instance.PlayExitGameButtonPressAudioClip();
 	}
 
 	private void GoBackToMainMenu()
@@ -176,5 +184,10 @@ public class GamePanelsController : MonoBehaviour
 		_hardDifficultyButton.OnPressed.RemoveListener(() => {});
 		_boardPositionConfirmedButton.OnPressed.RemoveListener(BoardPositionConfirmed);
 		_exitButton.OnPressed.RemoveListener(ExitButtonPressed);
+	}
+	
+	private void log(string logText){
+		string className = this.GetType().Name;
+		Debug.Log("["+className+"]  " +logText);
 	}
 }

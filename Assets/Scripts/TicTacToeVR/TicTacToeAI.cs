@@ -26,9 +26,18 @@ using Vector3 = UnityEngine.Vector3;
 
 public enum BoardState{none, cross, circle}		///Player uses circle while AI uses cross
 public enum TicTacToeTurn{player, AI}
+public enum Winner{Player, AI, Tie}
 public enum AILevel{easy, hard}
 
+public enum MatchingX_Or_Os
+{
+	DiagonalLeft, DiagonalRight, VerticalLeft, VerticalMiddle, VerticalRight, HorizontalTop, HorizontalMiddle, 
+	HorizontalBottom, None
+}
+
 public class UnityEventInt : UnityEvent<int> { }
+public class UnityEventWinner : UnityEvent<Winner> { }
+
 
 public class TicTacToeAI : MonoBehaviour
 {
@@ -42,7 +51,6 @@ public class TicTacToeAI : MonoBehaviour
 	[SerializeField] private int _gridSize = 3;
 
 	[SerializeField] private GameObject _xPrefab;
-
 	[SerializeField] private GameObject _oPrefab;
 	[SerializeField] private GameObject _ticTacToeBoard;
 
@@ -57,7 +65,8 @@ public class TicTacToeAI : MonoBehaviour
 	private ClickTrigger[,] _clickTriggers;
 
 	public UnityEvent onGameStarted = new UnityEvent();
-	public UnityEventInt onGameEnded = new UnityEventInt();
+	public UnityEvent CanListenToInputs = new UnityEvent();
+	public UnityEventWinner onGameEnded = new UnityEventWinner();
 
 	List<int> _availableCells = new List<int>(); ///0 = [0,0], 2 = [0,1], 3 = [0,2], 4 = [1,0]
 	HashSet<int> _usedCells = new HashSet<int>(); ///Used because of its O(1) access in its elements
@@ -74,7 +83,8 @@ public class TicTacToeAI : MonoBehaviour
 
 	private Vector3 _targetBoardPosition;
 	private Quaternion _targetBoardRotation;
-
+	private Material _xPrefabMaterial;
+	private Material _oPrefabMaterial;
 
 	[HideInInspector]
 	//Todo: It might be better to just parent the X and Os but bcoz of time limit, this is solution, for now, for clearing up the spawned X and Os
@@ -85,6 +95,9 @@ public class TicTacToeAI : MonoBehaviour
 		if (!_gamePanelsController) _gamePanelsController = GameObject.FindObjectOfType<GamePanelsController>();
 		_targetBoardPosition = _defaultGameBoardSpawnPoint.position;
 		_targetBoardRotation = _defaultGameBoardSpawnPoint.rotation;
+		// 'sharedMaterial' is used instead of 'material' because its a prefab object (not located insude scene)
+		_xPrefabMaterial = _xPrefab.transform.GetChild(0).GetComponent<Renderer>().sharedMaterial;
+		_oPrefabMaterial = _oPrefab.transform.GetChild(0).GetComponent<Renderer>().sharedMaterial;
 		// if(_autoStartGame) StartAI(0);
 	}
 
@@ -107,7 +120,6 @@ public class TicTacToeAI : MonoBehaviour
 		log("Starting Game");
 
 		spawnedTicTacToeBoard = Instantiate(_ticTacToeBoard, _targetBoardPosition, _targetBoardRotation);
-		// TryMakeBoardFaceCameraForward();
 
 		_clickTriggers = new ClickTrigger[_gridSize,_gridSize];
 		boardState = new BoardState[_gridSize,_gridSize];
@@ -126,6 +138,16 @@ public class TicTacToeAI : MonoBehaviour
 		aiLevelTMPText.text += _aiLevel==AILevel.easy ? "Easy" : "Hard";
 		
 		onGameStarted.Invoke();
+		StartCoroutine(Broadcast_GameHasStartedEvent());
+	}
+	
+	//Wait for animation to finish so as to start listening to player inputs 
+	private IEnumerator Broadcast_GameHasStartedEvent()
+	{
+		Transform resizableBoard = spawnedTicTacToeBoard.transform.GetChild(0);
+		float animationTime = resizableBoard.GetComponent<AnimateLocalScale>().animTime;
+		yield return new WaitForSeconds(animationTime + 0.5f);	//+ an allowance
+		CanListenToInputs.Invoke();
 	}
 	
 	
@@ -135,29 +157,6 @@ public class TicTacToeAI : MonoBehaviour
 		_clickTriggers[_cellX, _cellY] = clickTrigger;
 		log("ClickTrigger [" + _cellX + "," + _cellY + "] Registered");
 	}
-
-	private void TryMakeBoardFaceCameraForward()
-	{
-		//Trying to make the board face the camera's forward
-		if (Vector3.Dot(_playerCamera.forward, spawnedTicTacToeBoard.transform.forward) > -1 &&
-		    Vector3.Dot(_playerCamera.forward, spawnedTicTacToeBoard.transform.forward) < 1)
-		{
-			log("Trying to face camera");
-			Vector3 normal = Vector3.Cross(_playerCamera.forward, spawnedTicTacToeBoard.transform.forward);
-			Quaternion targetRotation = Quaternion.FromToRotation(spawnedTicTacToeBoard.transform.forward, normal) * 
-			                            spawnedTicTacToeBoard.transform.rotation;
-			spawnedTicTacToeBoard.transform.rotation = targetRotation;
-		}
-	}
-
-	// private void Update()
-	// {
-	// 	if(!_gameStarted) return;
-	// 	Vector3 end = _playerCamera.transform.position + _playerCamera.forward * 10;
-	// 	Debug.DrawLine(_playerCamera.transform.position, _playerCamera.forward, Color.red);
-	// 	end = spawnedTicTacToeBoard.transform.position + spawnedTicTacToeBoard.transform.forward * 10;
-	// 	Debug.DrawLine(spawnedTicTacToeBoard.transform.position, spawnedTicTacToeBoard.transform.forward, Color.red);
-	// }
 
 
 	public void PlayerSelects(int _cellX, int _cellY)
@@ -200,58 +199,60 @@ public class TicTacToeAI : MonoBehaviour
 		);
 		// spawnedObject.transform.parent = spawnedTicTacToeBoard.transform;
 		SpawnedXAndOsGameObjects.Add(spawnedObject);
+		AudioManager.Instance.PlayXOrO_PrefabSpawnAudioClip();
 
-		if(GameHasBeenWon().gameHasBeenWon) {
+		var outcome = GameHasBeenWon();
+		if(outcome.gameHasBeenWon) {
 			_gameHasAWinner = true;
 		}
 		
-		if(_noMovesLeft || _gameHasAWinner) StartCoroutine(EndGame());
+		if(_noMovesLeft || _gameHasAWinner) StartCoroutine(EndGame(outcome.matchingXOrOs));
 		else TogglePlayerTurn();
 	}
 
-	private(bool gameHasBeenWon, BoardState symbolThatWon) GameHasBeenWon()
+	private(bool gameHasBeenWon, BoardState symbolThatWon, MatchingX_Or_Os matchingXOrOs) GameHasBeenWon()
     {
 		if(boardState[0,0] != BoardState.none){
 			//Horizontal Top-most cells in 3*3 matrix
 			if(boardState[0,0] == boardState[0,1] && boardState[0,1] == boardState[0,2])
-				return (true, boardState[0,0]);
+				return (true, boardState[0,0], MatchingX_Or_Os.HorizontalTop);
 			//Vertical Left-most cells in 3*3 matrix
 			else if(boardState[0,0] == boardState[1,0] && boardState[1,0] == boardState[2,0])
-				return (true, boardState[0,0]);
+				return (true, boardState[0,0], MatchingX_Or_Os.VerticalLeft);
 			//Diagonal Left in 3*3 matrix
 			else if(boardState[0,0] == boardState[1,1] && boardState[1,1] == boardState[2,2])
-				return (true, boardState[0,0]);
+				return (true, boardState[0,0], MatchingX_Or_Os.DiagonalLeft);
 		}
 
 		if(boardState[0,2] != BoardState.none){
 			//Vertical Right-most cells in 3*3 matrix
 			if(boardState[0,2] == boardState[1,2] && boardState[1,2] == boardState[2,2])
-				return (true, boardState[0,2]);
+				return (true, boardState[0,2], MatchingX_Or_Os.VerticalRight);
 			//Diagonal Right in 3*3 matrix
 			else if(boardState[0,2] == boardState[1,1] && boardState[1,1] == boardState[2,0]){
-				return (true, boardState[0,2]);
+				return (true, boardState[0,2], MatchingX_Or_Os.DiagonalRight);
 			}
 		}
 
 		if(boardState[2,0] != BoardState.none){
 			//Horizontal Bottom-most cells in 3*3 matrix
 			if(boardState[2,0] == boardState[2,1] && boardState[2,1] == boardState[2,2])
-				return (true, boardState[2,0]);
+				return (true, boardState[2,0], MatchingX_Or_Os.HorizontalBottom);
 		}
 
 		if(boardState[0,1] != BoardState.none){
 			//Vertical Middle cells in 3*3 matrix
 			if(boardState[0,1] == boardState[1,1] && boardState[1,1] == boardState[2,1])
-				return (true, boardState[0,1]);
+				return (true, boardState[0,1], MatchingX_Or_Os.VerticalMiddle);
 		}
 
 		if(boardState[1,0] != BoardState.none){
 			//Horizontal Middle cells in 3*3 matrix
 			if(boardState[1,0] == boardState[1,1] && boardState[1,1] == boardState[1,2])
-				return (true, boardState[1,0]);
+				return (true, boardState[1,0], MatchingX_Or_Os.HorizontalMiddle);
 		}
 
-		return (false, BoardState.none);
+		return (false, BoardState.none, MatchingX_Or_Os.None);
     }
 
 	private void TogglePlayerTurn(){
@@ -396,14 +397,13 @@ public class TicTacToeAI : MonoBehaviour
         return true;
     }
 
-    private IEnumerator EndGame()
+    private IEnumerator EndGame(MatchingX_Or_Os matchingXOrOs)
 	{
 		yield return new WaitForSeconds(AI_TIME_DELAY);
-		///-1 -> Tie	0 -> Player		1 -> AI
-		int _winner = !_gameHasAWinner ? -1  : _ticTacToeTurn == TicTacToeTurn.player ? 0 : 1;
-
-		onGameEnded.Invoke(_winner);
+		Winner winner = !_gameHasAWinner ? Winner.Tie  : _ticTacToeTurn == TicTacToeTurn.player ? Winner.Player : Winner.AI;
+		onGameEnded.Invoke(winner);
 		_gameStarted = false;
+		DisplayMatchingX_Or_O(matchingXOrOs, winner);
 		// if(_autoStartGame) StartCoroutine(RestartGameAfterDelay());
 	}
 
@@ -413,6 +413,62 @@ public class TicTacToeAI : MonoBehaviour
 	// 	StartAI(0);
 	// }
 
+	private void DisplayMatchingX_Or_O(MatchingX_Or_Os matchingXOrOs, Winner winner)
+	{
+		if(winner == Winner.Tie) return;
+		log("Displaying matching XOrOs: "+matchingXOrOs.ToString());
+		Transform resizableBoard = spawnedTicTacToeBoard.transform.GetChild(0);
+		if (resizableBoard.childCount > 2)
+		{
+			Transform matchingXOrOsDisplay = resizableBoard.GetChild(2);
+			if (matchingXOrOsDisplay.transform.childCount > 2)
+			{
+				for (int i = 0; i < matchingXOrOsDisplay.transform.childCount; i++)
+				{
+					log(matchingXOrOsDisplay.transform.GetChild(i).name);
+				}
+				Transform diagonalDisplays = matchingXOrOsDisplay.transform.GetChild(0);
+				Transform verticalDisplays = matchingXOrOsDisplay.transform.GetChild(1);
+				Transform horizontalDisplays = matchingXOrOsDisplay.transform.GetChild(2);
+				Transform display = diagonalDisplays.GetChild(0);
+				
+				// Is Diagonal
+				if (matchingXOrOs == MatchingX_Or_Os.DiagonalRight) 
+					display = diagonalDisplays.GetChild(0);
+				else if (matchingXOrOs == MatchingX_Or_Os.DiagonalLeft) 
+					display = diagonalDisplays.GetChild(1);
+				
+				// Is Vertical
+				else if (matchingXOrOs == MatchingX_Or_Os.VerticalMiddle) 
+					display = verticalDisplays.GetChild(0);
+				else if (matchingXOrOs == MatchingX_Or_Os.VerticalLeft) 
+					display = verticalDisplays.GetChild(1);
+				else if (matchingXOrOs == MatchingX_Or_Os.VerticalRight) 
+					display = verticalDisplays.GetChild(2);
+				
+				// Is Horizontal
+				else if (matchingXOrOs == MatchingX_Or_Os.HorizontalMiddle) 
+					display = horizontalDisplays.GetChild(0);
+				else if (matchingXOrOs == MatchingX_Or_Os.HorizontalTop) 
+					display = horizontalDisplays.GetChild(1);
+				else if (matchingXOrOs == MatchingX_Or_Os.HorizontalBottom) 
+					display = horizontalDisplays.GetChild(2);
+
+				display.GetComponent<AnimateLocalScale>().MaximizeObject();
+				Renderer displayRenderer = display.GetComponent<Renderer>();
+				if(winner == Winner.Player) displayRenderer.material = _oPrefabMaterial;
+				else if(winner == Winner.AI) displayRenderer.material = _xPrefabMaterial;
+				Debug.Log("winner:"+ winner.ToString());
+
+			}
+		}
+	}
+	
+	public void GameExitedPrematurely()
+	{
+		_gameStarted = false;
+	}
+	
 	private void OnDestroy(){
 		StopAllCoroutines();
 	}

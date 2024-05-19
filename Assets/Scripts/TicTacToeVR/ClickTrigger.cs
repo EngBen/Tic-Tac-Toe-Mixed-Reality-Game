@@ -21,12 +21,11 @@ public class ClickTrigger : MonoBehaviour
 	private void Start(){
 
 		if(!_ai) _ai = FindObjectOfType<TicTacToeAI>();
-		_ai.onGameStarted.AddListener(OnGameStarted);
+		_ai.CanListenToInputs.AddListener(CanListenToInputs);
 		_ai.onGameEnded.AddListener((win) => DisableInput());
-		if(_ai.gameStarted) RegisterTransform();	// After the board is spawned in MR
 	}
 
-	private void OnGameStarted()
+	private void CanListenToInputs()
 	{
 		RegisterTransform();
 	}
@@ -60,7 +59,13 @@ public class ClickTrigger : MonoBehaviour
 			
 		}
 	}
-	
+
+	private void OnDestroy()
+	{
+		_ai.CanListenToInputs.RemoveListener(CanListenToInputs);
+		_ai.onGameEnded.RemoveListener((win) => {});
+	}
+
 	private void log(string logText){
 		string className = this.GetType().Name;
 		Debug.Log("["+className+"]  " +logText);

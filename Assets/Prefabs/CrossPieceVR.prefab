@@ -45,7 +45,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eed62b4057890f64693736f20e2fc725, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _animTime: 0.5
+  animTime: 1.2
   _growthCurve:
     serializedVersion: 2
     m_Curve:
@@ -79,7 +79,17 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  _minimizeCurve:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
   _scale: {x: 0.09, y: 0.09, z: 0.09}
+  _animateOnEnable: 1
+  gameObjectHasBeenMinimized:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &7648674744305938600
 GameObject:
   m_ObjectHideFlags: 0

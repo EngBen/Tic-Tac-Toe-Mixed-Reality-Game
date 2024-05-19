@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.darktable.xrgizmos": "https://github.com/darktable/XRGizmos.git",
     "com.meta.xr.mrutilitykit": "64.0.0",
     "com.meta.xr.sdk.core": "64.0.0",
     "com.meta.xr.sdk.interaction": "64.0.0",

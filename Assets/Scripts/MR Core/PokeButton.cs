@@ -11,9 +11,12 @@ public class PokeButton : MonoBehaviour
     private UnityEngine.Object _interactableView;
     
     private IInteractableView InteractableView { get; set; }
-    [FormerlySerializedAs("OnSelected")] public UnityEvent OnPressed;
+    public UnityEvent OnPressed;
     public UnityEvent OnReleased;
     public bool _buttonSelected = false;
+    
+    // One can choose to hide the button so that its events can be listened to but the button isnt interactable
+    private bool _isHidden = false;
 
     
     protected virtual void Awake()
@@ -28,11 +31,12 @@ public class PokeButton : MonoBehaviour
     
     void OnDestroy()
     {
-        InteractableView.WhenStateChanged -= (args => OnPokeInteractableStateChanged());
+        InteractableView.WhenStateChanged -= (args => {});
     }
     
     private void OnPokeInteractableStateChanged()
     {
+        if(_isHidden) return;
         switch (InteractableView.State)
         {
             case InteractableState.Select:      //Called when the button moves to its max limit
@@ -54,6 +58,18 @@ public class PokeButton : MonoBehaviour
                 // log("Poke Interactable Disabled");
                 break;
         }
+    }
+
+    public void Hide()
+    {
+        transform.GetComponent<RenderersInChildrenGameObjectsController>().DisableGeometryRender();
+        _isHidden = true;
+    }
+    
+    public void Show()
+    {
+        transform.GetComponent<RenderersInChildrenGameObjectsController>().EnableGeometryRender();
+        _isHidden = false;
     }
 
     private void log(string logText){

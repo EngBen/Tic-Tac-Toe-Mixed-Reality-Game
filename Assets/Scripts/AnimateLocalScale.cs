@@ -5,21 +5,21 @@ using UnityEngine.Serialization;
 
 public class AnimateLocalScale : MonoBehaviour{
 
-	[FormerlySerializedAs("_animTime")] public float animTime = 2f;
+	public float animTime = 2f;
 	[SerializeField] AnimationCurve _growthCurve;	
 	[SerializeField] AnimationCurve _minimizeCurve;	
 	[SerializeField] Vector3 _scale = Vector3.one;
+	public bool _animateOnEnable = true;
 
 	[HideInInspector] public UnityEvent gameObjectHasBeenMinimized = new UnityEvent();
-	[HideInInspector] public bool _animateOnEnable = true;
 	private bool _isAnimating = false;
 		
 	private void OnEnable()
 	{
-		if(_animateOnEnable) StartCoroutine(SpawnCoroutine());
+		if(_animateOnEnable) StartCoroutine(MaximizeObjectCoroutine());
 	}
 
-	IEnumerator SpawnCoroutine(){
+	IEnumerator MaximizeObjectCoroutine(){
 		yield return null;
 		for(float t = 0 ; t <= animTime; t += Time.deltaTime){
 			yield return new WaitForFixedUpdate();
@@ -28,6 +28,13 @@ public class AnimateLocalScale : MonoBehaviour{
 		_isAnimating = false;
 	}
 
+	public void MaximizeObject()
+	{
+		if(_isAnimating) return;
+		_isAnimating = true;
+		StartCoroutine(MaximizeObjectCoroutine());
+	}
+	
 	public void MinimizeObject()
 	{
 		if(_isAnimating) return;
