@@ -19,8 +19,10 @@ public class AddColliderDetectorToRoomMesh : MonoBehaviour
         MRUKAnchor[] mrukAnchors = GameObject.FindObjectsOfType<MRUKAnchor>();
         foreach (MRUKAnchor mrukAnchor in mrukAnchors)
         {
-            if(mrukAnchor.gameObject.name != "TABLE" && mrukAnchor.gameObject.name != "WALL_FACE"
-                && mrukAnchor.gameObject.name != "FLOOR") continue;
+            if(mrukAnchor.gameObject.name == "LAMP" || mrukAnchor.gameObject.name == "PLANT"
+               || mrukAnchor.gameObject.name == "CEILING" //todo: Allow ceiling to be spawned on after considering the todos
+                                                          //in 'PinBoardToSurface' script
+               ) continue;
 
             Transform colliderTransform = mrukAnchor.transform.GetChild(0);
             if (!colliderTransform.TryGetComponent(out PinBoardToSurface pinBoardToWall))
